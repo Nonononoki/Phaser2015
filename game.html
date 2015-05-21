@@ -1,0 +1,232 @@
+<!DOCTYPE HTML>
+<html>
+<head>
+    <title>Bullet Hell</title>
+    <meta charset="utf-8">
+    <script src="./js/phaser.min.js"></script>
+</head>
+<body>
+
+    <div id="game"></div>
+
+    <style>
+    #game
+    {
+    	height:600px;
+    	width:600px;
+    	margin-left: auto;
+   		margin-right: auto;
+    }
+    </style>
+    
+    <script type="text/javascript">
+
+    var game = new Phaser.Game(600, 600, Phaser.AUTO, 'game');
+
+    //  Our core Bullet class
+    //  This is a simple Sprite object that we set a few properties on
+    //  It is fired by all of the Weapon classes
+
+    var Bullet = function (game, key) {
+
+        Phaser.Sprite.call(this, game, 0, 0, key);
+
+        this.texture.baseTexture.scaleMode = PIXI.scaleModes.NEAREST;
+
+        this.anchor.set(-0.5);
+
+        this.checkWorldBounds = true;
+        this.outOfBoundsKill = true;
+        this.exists = false;
+
+        this.tracking = false;
+        this.scaleSpeed = 0;
+
+    };
+
+    Bullet.prototype = Object.create(Phaser.Sprite.prototype);
+    Bullet.prototype.constructor = Bullet;
+
+    Bullet.prototype.fire = function (x, y, angle, speed, gx, gy) {
+
+        gx = gx || 0;
+        gy = gy || 0;
+
+        this.reset(x, y);
+        this.scale.set(1);
+
+        this.game.physics.arcade.velocityFromAngle(angle, speed, this.body.velocity);
+
+        this.angle = angle;
+
+        this.body.gravity.set(gx, gy);
+
+    };
+
+    Bullet.prototype.update = function () {
+
+        if (this.tracking)
+        {
+            this.rotation = Math.atan2(this.body.velocity.y, this.body.velocity.x);
+        }
+
+        if (this.scaleSpeed > 0)
+        {
+            this.scale.x += this.scaleSpeed;
+            this.scale.y += this.scaleSpeed;
+        }
+
+    };
+
+    var Weapon = {};
+
+    ////////////////////////////////////////////////////
+    //  A single bullet is fired in front of the ship //
+    ////////////////////////////////////////////////////
+
+    Weapon.SingleBullet = function (game) {
+
+        Phaser.Group.call(this, game, game.world, 'Single Bullet', false, true, Phaser.Physics.ARCADE);
+
+        this.nextFire = 0;
+        this.bulletSpeed = 600;
+        this.fireRate = 100;
+
+        for (var i = 0; i < 64; i++)
+        {
+            this.add(new Bullet(game, 'bullet1'), true);
+        }
+
+        return this;
+
+    };
+
+    Weapon.SingleBullet.prototype = Object.create(Phaser.Group.prototype);
+    Weapon.SingleBullet.prototype.constructor = Weapon.SingleBullet;
+
+    Weapon.SingleBullet.prototype.fire = function (source) {
+
+        if (this.game.time.time < this.nextFire) { return; }
+
+        var x = source.x + 10;
+        var y = source.y + 10;
+
+        this.getFirstExists(false).fire(x, y, -90, this.bulletSpeed, 0, 0);
+
+        this.nextFire = this.game.time.time + this.fireRate;
+
+    };
+
+    //
+    //  The core game loop
+    //
+    var PhaserGame = function () {
+
+        this.background = null;
+        this.foreground = null;
+
+        this.player = null;
+        this.cursors = null;
+        this.speed = 300;
+
+        this.weapons = [];
+        this.currentWeapon = 0;
+    };
+
+    PhaserGame.prototype = {
+
+        init: function () {
+
+            this.game.renderer.renderSession.roundPixels = true;
+
+            this.physics.startSystem(Phaser.Physics.ARCADE);
+
+        },
+
+        preload: function () {
+
+        	var numBullets = 1;
+            //this.load.crossOrigin = 'anonymous';
+
+            this.load.image('background', 'assets/bg.png');
+            this.load.image('foreground', 'assets/fg.png');
+            this.load.image('player', 'assets/you.png');
+            //this.load.image('player2', 'assets/you2.png');
+            this.load.image('bullet1', 'assets/bull1.png');
+
+            
+            //for (var i = 1; i <= maxBullets; i++)
+            //{
+            //     this.load.image('bullet' + i, './assets/bullet' + i + '.png');
+            //}
+            
+        },
+
+        create: function () {
+
+            this.background = this.add.tileSprite(0, 0, this.game.width, this.game.height, 'background');
+            this.background.autoScroll(0, 400);
+
+            this.weapons.push(new Weapon.SingleBullet(this.game));
+
+            this.currentWeapon = 0;
+
+            //Startup position of spaceship
+            this.player = this.add.sprite(300,650,'player');
+
+            this.physics.arcade.enable(this.player);
+
+            this.player.body.collideWorldBounds = true;
+
+            this.foreground = this.add.tileSprite(0, 0, this.game.width, this.game.height, 'foreground');
+            this.foreground.autoScroll(0, 400);
+
+
+            //  Cursor keys to fly
+            this.cursors = this.input.keyboard.createCursorKeys();
+
+        },
+
+        update: function () {
+
+            this.player.body.velocity.set(0);
+            var speedReduction = 3;
+
+            if (this.cursors.left.isDown)
+            {
+            	if (this.input.keyboard.isDown(Phaser.Keyboard.SPACEBAR)) this.player.body.velocity.x = -this.speed/speedReduction;
+                else this.player.body.velocity.x = -this.speed;
+            }
+            else if (this.cursors.right.isDown)
+            {
+            	if (this.input.keyboard.isDown(Phaser.Keyboard.SPACEBAR)) this.player.body.velocity.x = this.speed/speedReduction;
+                else this.player.body.velocity.x = this.speed;
+            }
+
+            if (this.cursors.up.isDown)
+            {
+            	if (this.input.keyboard.isDown(Phaser.Keyboard.SPACEBAR)) this.player.body.velocity.y = -this.speed/speedReduction;
+                else this.player.body.velocity.y = -this.speed;
+            }
+            else if (this.cursors.down.isDown)
+            {
+            	if (this.input.keyboard.isDown(Phaser.Keyboard.SPACEBAR)) this.player.body.velocity.y = this.speed/speedReduction;
+                else this.player.body.velocity.y = this.speed;
+            }
+
+            //continuous firing
+            this.weapons[this.currentWeapon].fire(this.player);
+
+            //Space for accurate moving
+            this.input.keyboard.addKeyCapture([ Phaser.Keyboard.SPACEBAR ]);
+            
+        }
+
+    };
+
+    game.state.add('Game', PhaserGame, true);
+
+    </script>
+
+</body>
+</html>
